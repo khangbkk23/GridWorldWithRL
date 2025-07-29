@@ -178,8 +178,12 @@ def train_dqn(env, agent, episodes=1000, max_steps=200):
         avg_score = np.mean(scores[-100:])
         avg_scores.append(avg_score)
         
-        if episode % 100 == 0:
-            print(f"Episode {episode}, Average Score: {avg_score:.2f}, Epsilon: {agent.epsilon:.3f}")
+        if episode % 50 == 0:
+            print(f"Episode {episode}")
+            print(f"Average Score: {avg_scores[-1]:.2f}")
+            print(f"Epsilon: {agent.epsilon:.3f}")
+            print(f"Loss: {np.mean(agent.losses[-100:]):.6f}")
+            print("-" * 30)
     
     return scores, avg_scores
 

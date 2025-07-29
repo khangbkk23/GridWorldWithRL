@@ -68,7 +68,7 @@ class GridMatrix(object):
             xx, yy = x[0], x[1]
         
         assert(xx>=0 and yy>=0 and xx < self.n_width and yy < self.n_height), "Coordinates should be in reasonable range"
-        index = yy * self.n_width + yy # Tinh theo hang
+        index = yy * self.n_width + xx # Tinh theo hang
         return self.grids[index]
     
     # Set method
@@ -169,7 +169,7 @@ class GridWorldEnv(gym.Env):
         self.np_random, seed = seeding.np_random(seed)  
         return [seed]
 
-    def _step(self, action):
+    def step(self, action):
         assert self.action_space.contains(action), \
             "%r (%s) invalid" % (action, type(action))
         
@@ -227,7 +227,7 @@ class GridWorldEnv(gym.Env):
         for x,y,t in self.types:
             self.grids.set_type(x,y,t)
 
-    def _reset(self):
+    def reset(self):
         self.state = self._xy_to_state(self.start)
         return self.state   
 
@@ -244,7 +244,7 @@ class GridWorldEnv(gym.Env):
                 return True
         return False
 
-    def _render(self, mode='human', close=False):
+    def render(self, mode='human', close=False):
         if close:
             if self.viewer is not None:
                 self.viewer.close()
