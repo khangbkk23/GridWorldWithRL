@@ -45,4 +45,67 @@ class GridMatrix(object):
         self.reset()
     
     def reset(self):
-        pass
+        self.grids = []
+        for x in range(self.n_height):
+            for y in range(self.n_width):
+                self.grids.append(
+                    Grid(x, y, self.default_type, self.default_reward, self.default_value)
+                )
+    
+    def get_grid(self, x, y=None):
+        '''get a grid information
+        args: represented by x,y or just a tuple type of x
+        return: grid object
+        '''
+        
+        xx, yy = None, None
+        if isinstance(x, int):
+            xx, yy = x, y
+        elif isinstance(x, tuple):
+            xx, yy = x[0], x[1]
+        
+        assert(xx>=0 and yy>=0 and xx < self.n_width and yy < self.n_height),\ "Coordinates should be in reasonable range"
+        index = yy * self.n_width + yy # Tinh theo hang
+        return self.grids[index]
+    
+    def set_reward(self, x, y, reward):
+        grid = self.get_grid(x, y)
+        if grid is not None:
+            grid.reward = reward
+        else:
+            raise("Your grid required is not exist")
+        
+    def set_value(self, x, y, value):
+        grid = self.get_grid(x, y)
+        if grid is not None:
+            grid.value = value
+        else:
+            raise("Your grid required is not exist")
+        
+    def set_type(self, x, y, type):
+        grid = self.get_grid(x, y)
+        if grid is not None:
+            grid.type = type
+        else:
+            raise("Your grid required is not exist")
+        
+    def get_reward(self, x, y):
+        grid = self.get_grid(x, y)
+        if grid is not None:
+            return grid.reward
+        else:
+            return None
+    
+    def get_value(self, x, y):
+        grid = self.get_grid(x, y)
+        if grid is not None:
+            return grid.value
+        else:
+            return None
+    
+    def get_type(self, x, y):
+        grid = self.get_grid(x, y)
+        if grid is not None:
+            return grid.type
+        else:
+            return None
