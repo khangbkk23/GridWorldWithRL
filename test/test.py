@@ -1,7 +1,11 @@
-# simple_test.py - File test đơn giản từng bước
+# test.py
 
 import numpy as np
 import matplotlib.pyplot as plt
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 
 # Bước 1: Test GridWorld Environment
 def test_step1():
@@ -257,7 +261,7 @@ def test_step4():
 
 # Chạy tất cả tests
 def run_all_tests():
-    print("🚀 CHẠY TẤT CẢ TESTS DQN GRIDWORLD\n")
+    print("CHẠY TẤT CẢ TESTS DQN GRIDWORLD\n")
     
     tests = [
         ("GridWorld Environment", test_step1),
@@ -272,19 +276,19 @@ def run_all_tests():
         results.append((test_name, result))
     
     print("=" * 50)
-    print("📊 KẾT QUẢ TỔNG HỢP:")
+    print("KẾT QUẢ TỔNG HỢP:")
     for test_name, result in results:
-        status = "✅ PASS" if result else "❌ FAIL"
+        status = "PASS" if result else "FAIL"
         print(f"  {status} - {test_name}")
     
     all_passed = all(result for _, result in results)
     if all_passed:
-        print("\n🎉 TẤT CẢ TESTS ĐỀU PASS! Bạn có thể chạy DQN đầy đủ!")
-        print("\n📋 BƯỚC TIẾP THEO:")
+        print("\n TẤT CẢ TESTS ĐỀU PASS! Bạn có thể chạy DQN đầy đủ!")
+        print("\n BƯỚC TIẾP THEO:")
         print("1. Chạy: python main.py")
         print("2. Hoặc import và sử dụng DQN agent từ artifacts")
     else:
-        print("\n⚠️  MỘT SỐ TESTS FAIL. Hãy kiểm tra lại:")
+        print("\n  MỘT SỐ TESTS FAIL. Hãy kiểm tra lại:")
         print("1. Cài đặt đủ thư viện")
         print("2. Kiểm tra file gridworld.py")
         print("3. Kiểm tra version Python/PyTorch")

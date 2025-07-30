@@ -12,6 +12,7 @@ import logging
 import matplotlib.pyplot as plt
 from collections import deque
 from datetime import datetime
+import copy
 
 from reinforcement.dqn import DQN, ReplayBuffer
 
@@ -177,53 +178,45 @@ class DQNAgent:
     def experience_replay(self):
         if len(self.replay_memory) < self.mini_batch_size:
             return
-        
-        batch = self.replay_memory.sample(self.mini_batch_size)
         states, actions, rewards, next_states, dones = self.replay_memory.sample(self.mini_batch_size)
-        
         if hasattr(self.env.observation_space, 'n'):
             state_batch = torch.zeros(self.mini_batch_size, self.state_size)
             next_state_batch = torch.zeros(self.mini_batch_size, self.state_size)
             for i, (s, ns) in enumerate(zip(states, next_states)):
-                state_batch[i, s] = 1.0
-                next_state_batch[i, ns] = 1.0
+                state_batch[i, int(s)] = 1.0
+                next_state_batch[i, int(ns)] = 1.0
         else:
             state_batch = torch.FloatTensor(states)
             next_state_batch = torch.FloatTensor(next_states)
-        
+
         state_batch = state_batch.to(self.device)
-        action_batch = torch.LongTensor(actions).to(self.device)
-        reward_batch = torch.FloatTensor(rewards).to(self.device)
         next_state_batch = next_state_batch.to(self.device)
-        done_batch = torch.BoolTensor(dones).to(self.device)
-        
-        # Current Q-values
-        current_q_values = self.q_network(state_batch).gather(1, action_batch.unsqueeze(1))
-        
-        # Next Q-values from target network
+        action_batch = torch.LongTensor(actions).to(self.device)
+        reward_batch = torch.tensor(rewards, dtype=torch.float32).to(self.device)
+        done_batch = torch.tensor(dones, dtype=torch.bool).to(self.device)
+        current_q_values = self.q_network(state_batch).gather(1, action_batch.unsqueeze(1)).squeeze(1)
+
+        # Dự đoán Q tương lai từ target network
         with torch.no_grad():
-            next_q_values = self.target_network(next_state_batch).max(1)[0]
-            target_q_values = reward_batch + (self.discount_factor_g * next_q_values * ~done_batch)
-        
-        # Compute loss
-        loss = self.loss_fn(current_q_values.squeeze(), target_q_values)
-        
-        # Optimize
+            next_actions = self.q_network(next_state_batch).argmax(dim=1, keepdim=True)
+            next_q_values = self.target_network(next_state_batch).gather(1, next_actions).squeeze(1)
+            target_q_values = reward_batch + self.discount_factor_g * next_q_values * (~done_batch)
+
+        # Tính loss
+        loss = self.loss_fn(current_q_values, target_q_values)
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-        
+
         self.losses.append(loss.item())
-        
-        # Update target network
         if self.steps_done % self.network_sync_rate == 0:
             self.update_target_network()
-        
-        # Decay epsilon
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
-        
+
+        # Giảm epsilon
+        self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
+
         self.steps_done += 1
+
     
     def replay(self):
         self.experience_replay()
@@ -256,7 +249,8 @@ def train_dqn(env, agent, episodes=1000, max_steps=200, print_every=100):
     """Training loop for DQN agent"""
     scores = []
     avg_scores = []
-    
+    best_avg_score = -float("inf")
+    best_model_state = None
     print(f"Starting training for {episodes} episodes...")
     print(f"Device: {agent.device}")
     
@@ -282,6 +276,10 @@ def train_dqn(env, agent, episodes=1000, max_steps=200, print_every=100):
         avg_score = np.mean(scores[-100:]) if len(scores) >= 100 else np.mean(scores)
         avg_scores.append(avg_score)
         
+        if avg_score > best_avg_score:
+            best_avg_score = avg_score
+            best_model_state = copy.deepcopy(agent.q_network.state_dict())
+            
         if episode % print_every == 0:
             print(f"Episode {episode:4d} | "
                   f"Score: {total_reward:6.2f} | "
@@ -295,6 +293,10 @@ def train_dqn(env, agent, episodes=1000, max_steps=200, print_every=100):
         if avg_score >= agent.stop_on_reward:
             print(f"Solved in {episode} episodes! Average score: {avg_score:.2f}")
             break
+        
+    if best_model_state:
+        agent.q_network.load_state_dict(best_model_state)
+        agent.update_target_network()
     
     print("Training completed!")
     return scores, avg_scores
@@ -365,7 +367,10 @@ def plot_training_results(scores, avg_scores, losses=None, save_path=None):
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Plot saved to {save_path}")
     
-    plt.show()
+    if os.environ.get("DISPLAY"):
+        plt.show()
+    else:
+        plt.close()
 
 def visualize_grid_and_policy(agent, save_path=None):
     if agent.env_id != 'GridWorld':
@@ -443,7 +448,6 @@ def visualize_grid_and_policy(agent, save_path=None):
     ax2.set_xlabel('X coordinate')
     ax2.set_ylabel('Y coordinate')
     
-    # Add arrows for policy
     for i in range(n_height):
         for j in range(n_width):
             if policy_grid[i, j] >= 0:
@@ -454,7 +458,6 @@ def visualize_grid_and_policy(agent, save_path=None):
     cbar2 = plt.colorbar(im2, ax=ax2)
     cbar2.set_label('Action (0:Left, 1:Right, 2:Up, 3:Down)')
     
-    # Add grid lines
     ax2.set_xticks(np.arange(-0.5, n_width, 1), minor=True)
     ax2.set_yticks(np.arange(-0.5, n_height, 1), minor=True)
     ax2.grid(which='minor', color='black', linestyle='-', linewidth=1)
