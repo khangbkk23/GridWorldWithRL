@@ -301,8 +301,6 @@ class GridWorldEnv(gym.Env):
 
         return self.viewer.render(return_rgb_array = mode == 'rgb_array')
     def RandomWalk():
-        '''随机行走示例环境
-        '''
         env = GridWorldEnv(n_width=7,
                         n_height = 1,
                         u_size = 80,
@@ -317,8 +315,6 @@ class GridWorldEnv(gym.Env):
         return env   
 
     def CliffWalk():
-        '''悬崖行走格子世界环境
-        '''
         env = GridWorldEnv(n_width=12,
                         n_height = 4,
                         u_size = 60,

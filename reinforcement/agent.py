@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from collections import deque
 from datetime import datetime
 
-from DQN import DQN, ReplayBuffer
+from reinforcement.dqn import DQN, ReplayBuffer
 
 # Import GridWorld components
 from gridworld import GridWorldEnv
@@ -149,17 +149,14 @@ class DQNAgent:
     def state_to_tensor(self, state):
         """Convert state to tensor"""
         if hasattr(self.env.observation_space, 'n'):
-            # Discrete state space - use one-hot encoding
             state_tensor = torch.zeros(self.state_size)
             state_tensor[state] = 1.0
         else:
-            # Continuous state space
             state_tensor = torch.FloatTensor(state)
         
         return state_tensor.unsqueeze(0).to(self.device)
     
     def select_action(self, state, training=True):
-        """Select action using epsilon-greedy policy"""
         if training and random.random() < self.epsilon:
             return random.randrange(self.action_size)
         
@@ -182,7 +179,7 @@ class DQNAgent:
             return
         
         batch = self.replay_memory.sample(self.mini_batch_size)
-        states, actions, rewards, next_states, dones = zip(*batch)
+        states, actions, rewards, next_states, dones = self.replay_memory.sample(self.mini_batch_size)
         
         if hasattr(self.env.observation_space, 'n'):
             state_batch = torch.zeros(self.mini_batch_size, self.state_size)
