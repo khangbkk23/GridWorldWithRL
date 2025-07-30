@@ -48,7 +48,7 @@ class DQNAgent:
     """DQN Agent"""
     def __init__(self, hyperparameter_set, render=False):
         # Load config từ file YAML
-        config_path = './hyper_param.yml'  # Sử dụng file config của bạn
+        config_path = './config/env.yaml'  # Sử dụng file config của bạn
         with open(config_path, 'r') as file:
             all_hyperparameter_sets = yaml.safe_load(file)
             hyperparameters = all_hyperparameter_sets[hyperparameter_set]
