@@ -1,6 +1,7 @@
-# 🧠 DQN GridWorld RL Project
+# 🧠 DQN Agent for GridWorld & OpenAI Gym Environments
 
-A simple implementation of Deep Q-Learning (DQN) in a 4x4 GridWorld environment using PyTorch. The project allows you to train an agent, test its performance, and visualize results.
+A PyTorch implementation of Deep Q-Learning (DQN) for various GridWorld scenarios and classic OpenAI Gym environments.
+This project demonstrates how to train a DQN agent using both custom GridWorld environments and standard OpenAI Gym environments like CartPole and LunarLander.
 
 ---
 
@@ -46,20 +47,49 @@ pip install -r requirements.txt
 
 To train the agent in a specific environment (e.g., basic or maze):
 
+### Train on GridWorld Environments
+
 ```bash
-python main.py --config gridworld_basic --episodes 1000
+python main.py --config gridworld_basic --episodes 1500 --visualize
 ```
+```bash
+python main.py --config gridworld_advanced --episodes 2000 --visualize
+```
+```bash
+python main.py --config gridworld_maze --episodes 3000 --visualize
+```
+```bash
+python main.py --config cliff_walking --episodes 1500 --visualize
+```
+```bash
+python main.py --config windy_gridworld --episodes 1500 --visualize
 
-or for the maze version:
+```
+### Train on OpenAI Gym Environment
 
 ```bash
-python main.py --config gridworld_maze --episodes 1500 --visualize
+python main.py --config cartpole --episodes 500
+```
+```bash
+python main.py --config lunarlander --episodes 1000
 ```
 
 - `--episodes`: Number of episodes to train
 - `--visualize`: (Optional) Turn on real-time training visualization
 
 ---
+
+## 📂 Supported Environments
+
+The following environments are available via `--config`:
+
+- `gridworld_basic`
+- `gridworld_advanced`
+- `gridworld_maze`
+- `cliff_walking`
+- `windy_gridworld`
+- `cartpole`
+- `lunarlander`
 
 ## 🧪 Testing the Agent
 
