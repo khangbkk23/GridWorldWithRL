@@ -73,7 +73,7 @@ def main():
         agent = DQNAgent(args.config, render=args.render)
     except Exception as e:
         print(f"Error creating agent: {e}")
-        print("Available configs in hyper_param.yml:")
+        print("Available configs in env.yml:")
         print("- gridworld_basic")
         print("- gridworld_advanced") 
         print("- gridworld_maze")

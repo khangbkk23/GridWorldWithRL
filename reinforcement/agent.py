@@ -13,42 +13,19 @@ import matplotlib.pyplot as plt
 from collections import deque
 from datetime import datetime
 
+from DQN import DQN, ReplayBuffer
+
+# Import GridWorld components
+from gridworld import GridWorldEnv
+
 DATE_FORMAT = "%m-%d %H:%M:%S"
 RUNS_DIR = 'results'
 os.makedirs(RUNS_DIR, exist_ok=True)
 
-class DQN(nn.Module):
-    """Deep Q-Network"""
-    def __init__(self, state_size, action_size, hidden_size=128):
-        super(DQN, self).__init__()
-        self.fc1 = nn.Linear(state_size, hidden_size)
-        self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.fc3 = nn.Linear(hidden_size, action_size)
-        
-    def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        return self.fc3(x)
-
-class ReplayBuffer:
-    """Experience Replay Buffer"""
-    def __init__(self, capacity):
-        self.buffer = deque(maxlen=capacity)
-    
-    def push(self, state, action, reward, next_state, done):
-        self.buffer.append((state, action, reward, next_state, done))
-    
-    def sample(self, batch_size):
-        return random.sample(self.buffer, batch_size)
-    
-    def __len__(self):
-        return len(self.buffer)
-
 class DQNAgent:
     """DQN Agent"""
     def __init__(self, hyperparameter_set, render=False):
-        # Load config từ file YAML
-        config_path = './config/env.yaml'  # Sử dụng file config của bạn
+        config_path = './config/env.yaml'
         with open(config_path, 'r') as file:
             all_hyperparameter_sets = yaml.safe_load(file)
             hyperparameters = all_hyperparameter_sets[hyperparameter_set]
@@ -57,9 +34,7 @@ class DQNAgent:
         self.render = render
         self.env_id = hyperparameters['env_id']
         
-        # Create environment
         if self.env_id == 'GridWorld':
-            from gridworld import GridWorldEnv
             self.env = self._create_gridworld(hyperparameters.get('env_make_param', {}))
         else:
             import gym
@@ -94,60 +69,66 @@ class DQNAgent:
             self.action_size = self.env.action_space.n
         else:
             self.action_size = self.env.action_space.shape[0]
-        
-        # Neural Networks
+
         self.q_network = DQN(self.state_size, self.action_size, self.fc1_nodes).to(self.device)
         self.target_network = DQN(self.state_size, self.action_size, self.fc1_nodes).to(self.device)
-        
-        # Optimizer and Loss
+
         self.optimizer = optim.Adam(self.q_network.parameters(), lr=self.learning_rate_a)
         self.loss_fn = nn.MSELoss()
-        
-        # Replay Memory
+
         self.replay_memory = ReplayBuffer(self.replay_memory_size)
-        
-        # Update target network
         self.update_target_network()
-        
-        # Training statistics
         self.losses = []
         self.rewards_history = []
         self.steps_done = 0
         
-        # Logging
         self.LOG_FILE = os.path.join(RUNS_DIR, f'{self.hyperparameter_set}.log')
         self._setup_logging()
     
     def _create_gridworld(self, params):
-        """Create GridWorld environment with parameters"""
-        from gridworld import GridWorldEnv
-        
+        # Load parameters from env.yaml if not provided directly
+        if isinstance(params, str):
+            # params is a path to a yaml file
+            params = './config/env.yaml'
+            with open(params, 'r') as f:
+                params = yaml.safe_load(f)
+
+        self.n_width = params.get('n_width', 7)
+        self.n_height = params.get('n_height', 7)
+        self.default_reward = params.get('default_reward', -0.1)
+        self.default_type = params.get('default_type', 0)
+        self.windy = params.get('windy', False)
+
         env = GridWorldEnv(
-            n_width=params.get('n_width', 10),
-            n_height=params.get('n_height', 7),
+            n_width=self.n_width,
+            n_height=self.n_height,
             u_size=params.get('u_size', 40),
-            default_reward=params.get('default_reward', -0.1),
-            default_type=params.get('default_type', 0),
-            windy=params.get('windy', False)
+            default_reward=self.default_reward,
+            default_type=self.default_type,
+            windy=self.windy
         )
         
-        # Set start and end positions
-        env.start = tuple(params.get('start', [0, 0]))
-        env.ends = [tuple(end) for end in params.get('ends', [[9, 6]])]
+        if 'start' in params:
+            env.start = tuple(params['start'])
+        if 'ends' in params:
+            env.ends = [tuple(end) for end in params['ends']]
         
-        # Set special types (obstacles)
         if 'types' in params:
-            env.types = [tuple(t) for t in params['types']]
-        
-        # Set special rewards
+            env.types = []
+            for type_info in params['types']:
+                if len(type_info) == 3:
+                    env.types.append(tuple(type_info))
+                else:
+                    env.types.append((type_info[0], type_info[1], 1))
+
         if 'rewards' in params:
-            env.rewards = [tuple(r) for r in params['rewards']]
-        
+            env.rewards = []
+            for reward_info in params['rewards']:
+                env.rewards.append(tuple(reward_info))
         env.refresh_setting()
         return env
     
     def _setup_logging(self):
-        """Setup logging configuration"""
         logging.basicConfig(
             filename=self.LOG_FILE,
             level=logging.INFO,
@@ -188,29 +169,22 @@ class DQNAgent:
         return q_values.max(1)[1].item()
     
     def act(self, state, training=True):
-        """Alias for select_action"""
         return self.select_action(state, training)
     
     def store_experience(self, state, action, reward, next_state, done):
-        """Store experience in replay memory"""
         self.replay_memory.push(state, action, reward, next_state, done)
     
     def remember(self, state, action, reward, next_state, done):
-        """Alias for store_experience"""
         self.store_experience(state, action, reward, next_state, done)
     
     def experience_replay(self):
-        """Train the network on a batch of experiences"""
         if len(self.replay_memory) < self.mini_batch_size:
             return
         
-        # Sample batch
         batch = self.replay_memory.sample(self.mini_batch_size)
         states, actions, rewards, next_states, dones = zip(*batch)
         
-        # Convert to tensors
         if hasattr(self.env.observation_space, 'n'):
-            # One-hot encoding for discrete states
             state_batch = torch.zeros(self.mini_batch_size, self.state_size)
             next_state_batch = torch.zeros(self.mini_batch_size, self.state_size)
             for i, (s, ns) in enumerate(zip(states, next_states)):
@@ -255,11 +229,9 @@ class DQNAgent:
         self.steps_done += 1
     
     def replay(self):
-        """Alias for experience_replay"""
         self.experience_replay()
     
     def save(self, filename):
-        """Save the trained model"""
         torch.save({
             'q_network_state_dict': self.q_network.state_dict(),
             'target_network_state_dict': self.target_network.state_dict(),
@@ -273,7 +245,6 @@ class DQNAgent:
         print(f"Model saved to {filename}")
     
     def load(self, filename):
-        """Load a trained model"""
         checkpoint = torch.load(filename, map_location=self.device)
         self.q_network.load_state_dict(checkpoint['q_network_state_dict'])
         self.target_network.load_state_dict(checkpoint['target_network_state_dict'])
@@ -283,17 +254,6 @@ class DQNAgent:
         self.losses = checkpoint['losses']
         self.rewards_history = checkpoint['rewards_history']
         print(f"Model loaded from {filename}")
-
-def state_to_features(state, env=None):
-    """Convert environment state to features"""
-    if isinstance(state, tuple):
-        # Convert (x, y) to state index
-        x, y = state
-        if env is not None:
-            return x * env.n_height + y
-        else:
-            return x * 10 + y  # Default assumption
-    return state
 
 def train_dqn(env, agent, episodes=1000, max_steps=200, print_every=100):
     """Training loop for DQN agent"""
@@ -305,20 +265,16 @@ def train_dqn(env, agent, episodes=1000, max_steps=200, print_every=100):
     
     for episode in range(episodes):
         state = env.reset()
-        state_features = state_to_features(state, env)
         total_reward = 0
         steps = 0
         
         for step in range(max_steps):
-            action = agent.act(state_features)
-            next_state, reward, done, info = env.step(action)
-            next_state_features = state_to_features(next_state, env)
-            
-            agent.remember(state_features, action, reward, next_state_features, done)
-            state_features = next_state_features
+            action = agent.act(state)
+            next_state, reward, done, info = env.step(action) 
+            agent.remember(state, action, reward, next_state, done)
+            state = next_state
             total_reward += reward
             steps += 1
-            
             agent.replay()
             
             if done:
@@ -339,7 +295,6 @@ def train_dqn(env, agent, episodes=1000, max_steps=200, print_every=100):
             if agent.losses:
                 print(f"           | Loss: {np.mean(agent.losses[-100:]):.6f}")
         
-        # Early stopping condition
         if avg_score >= agent.stop_on_reward:
             print(f"Solved in {episode} episodes! Average score: {avg_score:.2f}")
             break
@@ -355,22 +310,17 @@ def test_agent(env, agent, episodes=10, render=False, max_steps=200):
     
     for episode in range(episodes):
         state = env.reset()
-        state_features = state_to_features(state, env)
         total_reward = 0
         steps = 0
         
         while steps < max_steps:
             if render:
                 env.render()
-            
-            action = agent.act(state_features, training=False)
+            action = agent.act(state, training=False)
             next_state, reward, done, info = env.step(action)
-            next_state_features = state_to_features(next_state, env)
-            
-            state_features = next_state_features
+            state = next_state
             total_reward += reward
             steps += 1
-            
             if done:
                 break
         
@@ -382,9 +332,7 @@ def test_agent(env, agent, episodes=10, render=False, max_steps=200):
     return scores
 
 def plot_training_results(scores, avg_scores, losses=None, save_path=None):
-    """Plot training results"""
     fig, axes = plt.subplots(2, 1, figsize=(12, 10))
-    
     # Plot scores
     axes[0].plot(scores, alpha=0.3, color='blue', label='Episode Score')
     axes[0].plot(avg_scores, color='red', linewidth=2, label='Average Score (100 episodes)')
@@ -394,7 +342,6 @@ def plot_training_results(scores, avg_scores, losses=None, save_path=None):
     axes[0].legend()
     axes[0].grid(True, alpha=0.3)
     
-    # Plot losses
     if losses and len(losses) > 0:
         if len(losses) > 100:
             smoothed_losses = []
@@ -424,50 +371,43 @@ def plot_training_results(scores, avg_scores, losses=None, save_path=None):
     plt.show()
 
 def visualize_grid_and_policy(agent, save_path=None):
-    """Visualize GridWorld environment and learned policy"""
     if agent.env_id != 'GridWorld':
         print("Grid visualization only available for GridWorld environment")
         return
     
     env = agent.env
     n_width, n_height = env.n_width, env.n_height
-    
-    # Create figure with subplots
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
     
     # Plot 1: Environment Layout
     grid = np.zeros((n_height, n_width))
-    
-    # Mark obstacles
     for obstacle in env.types:
         x, y = obstacle[0], obstacle[1]
         if 0 <= x < n_width and 0 <= y < n_height:
-            grid[n_height-1-y, x] = -1  # Obstacle
+            grid[n_height-1-y, x] = -1
     
     # Mark special rewards
     for reward_info in env.rewards:
         x, y, reward = reward_info[0], reward_info[1], reward_info[2]
         if 0 <= x < n_width and 0 <= y < n_height:
-            grid[n_height-1-y, x] = reward / 10  # Scale for visualization
+            grid[n_height-1-y, x] = reward / 10
     
     # Mark start and goal
     start_x, start_y = env.start
-    grid[n_height-1-start_y, start_x] = 0.5  # Start
+    grid[n_height-1-start_y, start_x] = 0.5
     
     for end in env.ends:
         end_x, end_y = end[0], end[1]
-        grid[n_height-1-end_y, end_x] = 1  # Goal
+        grid[n_height-1-end_y, end_x] = 1
     
     im1 = ax1.imshow(grid, cmap='RdYlGn', vmin=-1, vmax=1)
     ax1.set_title('GridWorld Environment')
     ax1.set_xlabel('X coordinate')
     ax1.set_ylabel('Y coordinate')
     
-    # Add colorbar
     cbar1 = plt.colorbar(im1, ax=ax1)
     cbar1.set_label('Value')
-    
-    # Add grid lines
+
     ax1.set_xticks(np.arange(-0.5, n_width, 1), minor=True)
     ax1.set_yticks(np.arange(-0.5, n_height, 1), minor=True)
     ax1.grid(which='minor', color='black', linestyle='-', linewidth=1)
@@ -476,15 +416,16 @@ def visualize_grid_and_policy(agent, save_path=None):
     policy_grid = np.zeros((n_height, n_width))
     arrow_grid = np.zeros((n_height, n_width, 2))
     
-    # Action directions (right, up, left, down)
-    action_arrows = [(1, 0), (0, 1), (-1, 0), (0, -1)]
+    # Action directions for GridWorld: 0=left, 1=right, 2=up, 3=down
+    action_arrows = [(-1, 0), (1, 0), (0, 1), (0, -1)]
     
     for x in range(n_width):
         for y in range(n_height):
-            state_idx = x * n_height + y
+            # Convert (x,y) to state index using GridWorld's method
+            state_idx = env._xy_to_state(x, y)
             
             # Skip obstacles
-            if (x, y, 1) in env.types:
+            if env.grids.get_type(x, y) == 1:
                 policy_grid[n_height-1-y, x] = -1
                 continue
             
@@ -508,14 +449,13 @@ def visualize_grid_and_policy(agent, save_path=None):
     # Add arrows for policy
     for i in range(n_height):
         for j in range(n_width):
-            if policy_grid[i, j] >= 0:  # Not an obstacle
+            if policy_grid[i, j] >= 0:
                 dx, dy = arrow_grid[i, j]
                 ax2.arrow(j, i, dx*0.3, -dy*0.3, head_width=0.1, 
                          head_length=0.1, fc='white', ec='white')
     
-    # Add colorbar
     cbar2 = plt.colorbar(im2, ax=ax2)
-    cbar2.set_label('Action (0:Right, 1:Up, 2:Left, 3:Down)')
+    cbar2.set_label('Action (0:Left, 1:Right, 2:Up, 3:Down)')
     
     # Add grid lines
     ax2.set_xticks(np.arange(-0.5, n_width, 1), minor=True)
@@ -527,5 +467,15 @@ def visualize_grid_and_policy(agent, save_path=None):
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Grid visualization saved to {save_path}")
-    
     plt.show()
+    
+def create_predefined_gridworld(env_type):
+    """Create predefined GridWorld environments"""
+    if env_type == "RandomWalk":
+        return GridWorldEnv.RandomWalk()
+    elif env_type == "CliffWalk":
+        return GridWorldEnv.CliffWalk()
+    elif env_type == "SkullAndTreasure":
+        return GridWorldEnv.SkullAndTreasure()
+    else:
+        raise ValueError(f"Unknown environment type: {env_type}")

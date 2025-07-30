@@ -70,9 +70,6 @@ class GridMatrix(object):
         assert(xx>=0 and yy>=0 and xx < self.n_width and yy < self.n_height), "Coordinates should be in reasonable range"
         index = yy * self.n_width + xx # Tinh theo hang
         return self.grids[index]
-    
-    # Set method
-    
     def set_reward(self, x, y, reward):
         grid = self.get_grid(x, y)
         if grid is not None:
@@ -122,7 +119,6 @@ class GridWorldEnv(gym.Env):
         'render.mode': ['human', 'rgb_array'],
         'video.frames_per_second': 30
     }
-    
     def __init__(self, n_width:int=10,
                        n_height:int = 7,
                        u_size = 40,
