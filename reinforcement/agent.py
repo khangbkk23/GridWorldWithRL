@@ -6,7 +6,7 @@ import numpy as np
 import random
 from collections import deque
 import matplotlib.pyplot as plt
-from gridworld import GridWorldEnv  # Import your GridWorld environment
+from gridworld import GridWorldEnv
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class DQN(nn.Module):
@@ -114,11 +114,9 @@ class DQNAgent:
         
         self.losses.append(loss.item())
         
-        # Update target network
         if self.steps % self.target_update == 0:
             self.update_target()
         
-        # Decay epsilon
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
         
@@ -144,8 +142,6 @@ class DQNAgent:
         self.steps = checkpoint['steps']
 
 def state_to_features(state, env):
-    """Convert state to feature vector"""
-    # Simple one-hot encoding
     features = np.zeros(env.observation_space.n)
     features[state] = 1
     return features
